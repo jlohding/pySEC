@@ -1,8 +1,9 @@
 import os
 import http
 import time
-import urllib
+import urllib.request
 import concurrent.futures
+from tqdm import tqdm
 from ratelimit import sleep_and_retry, limits
 import pandas as pd
 
@@ -64,27 +65,18 @@ class Client:
 
     def download(self, urls):
         out = []
-        
+        total_urls = len(urls)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             future_to_url = (executor.submit(self.load_url, url) for url in urls)
                 
-            time_0 = time.time()
-
-            count = 0
-            for future in concurrent.futures.as_completed(future_to_url):
+            for future in tqdm(concurrent.futures.as_completed(future_to_url), total=total_urls, colour="green"):
                 try:
                     url, text = future.result()
                     #self.export(text, url.replace("/", "\\"))
                     out.append((url, text))
                 except Exception as exc:
                     text = str(type(exc))
-                    print(text)
-                finally:
-                    count += 1
-                    print(count, time.time() - time_0)
-
-        print(f'Took {time.time()-time_0:.2f} seconds')
 
         return out
     
