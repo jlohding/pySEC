@@ -40,12 +40,14 @@ class Client:
         return df        
 
     def search_loan_agreements(self):
-        keywords = {
-                "CREDIT AGREEMENT", "LOAN AGREEMENT", "CREDIT FACILITY", "LOAN AND SECURITY AGREEMENT", "LOAN & SECURITY AGREEMENT", "CREDIT AND GUARANTEE AGREEMENT", 
-                "CREDIT & GUARANTEE AGREEMENT", "CREDIT AND GUARANTY AGREEMENT", "CREDIT & GUARANTY AGREEMENT", "LOAN AND GUARANTEE AGREEMENT", "LOAN & GUARANTEE AGREEMENT",
-                "LOAN AND GUARANTY AGREEMENT", "LOAN & GUARANTY AGREEMENT", "CREDIT AND SECURITY AGREEMENT", "CREDIT & SECURITY AGREEMENT", "LOAN AND SECURITY AGREEMENT",
-                "LOAN & SECURITY AGREEMENT", "REVOLVING CREDIT", "FINANCING AND SECURITY AGREEMENT", "FINANCING & SECURITY AGREEMENT", "FACILITY AGREEMENT"
-        }
+        def is_loan_agreement(text) -> bool:
+            keywords = {
+                    "CREDIT AGREEMENT", "LOAN AGREEMENT", "CREDIT FACILITY", "LOAN AND SECURITY AGREEMENT", "LOAN & SECURITY AGREEMENT", "CREDIT AND GUARANTEE AGREEMENT", 
+                    "CREDIT & GUARANTEE AGREEMENT", "CREDIT AND GUARANTY AGREEMENT", "CREDIT & GUARANTY AGREEMENT", "LOAN AND GUARANTEE AGREEMENT", "LOAN & GUARANTEE AGREEMENT",
+                    "LOAN AND GUARANTY AGREEMENT", "LOAN & GUARANTY AGREEMENT", "CREDIT AND SECURITY AGREEMENT", "CREDIT & SECURITY AGREEMENT", "LOAN AND SECURITY AGREEMENT",
+                    "LOAN & SECURITY AGREEMENT", "REVOLVING CREDIT", "FINANCING AND SECURITY AGREEMENT", "FINANCING & SECURITY AGREEMENT", "FACILITY AGREEMENT"
+            }
+            return any(keyword in text for keyword in keywords)
 
         df = self.master_df.copy()
         df = df[df["Form Type"] == "8-K"]
@@ -55,8 +57,8 @@ class Client:
         out = self.download(urls=df["Filename"].to_list())
         downloads_df = pd.DataFrame(out, columns=["Filename", "Text"])
 
-        downloads_df["Is Loan Agreement"] = any(keyword in downloads_df["Text"] for keyword in keywords)
-        
+        downloads_df["Is Loan Agreement"] = downloads_df["Text"].apply(is_loan_agreement)
+
         return df.merge(downloads_df, how="left", on="Filename").drop(columns="Text")        
 
 
