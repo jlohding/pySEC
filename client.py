@@ -1,111 +1,40 @@
-import os
-import http
-import time
-import urllib.request
-import concurrent.futures
-from tqdm import tqdm
-from ratelimit import sleep_and_retry, limits
-import pandas as pd
+from strategies.exporters import ExportHTMLStrategy, ExportDataFrameStrategy
+from strategies.downloaders import MasterStrategy, SearchLoanAgreementStrategy, DownloadLoanAgreementStrategy
 
 class Client:
     def __init__(self):
-        self.headers = {
-            "User-Agent" : "Samples Company Name AdminContact@<sample company domain>.com"
-        }
-        self.base_path = "https://www.sec.gov/Archives/edgar/full-index/"
-        self.master_df = None
-        self.urls = []
-
-    def set_master(self, year: int, qtr: int) -> pd.DataFrame:
-        '''
-        Returns master.idx DataFrame
-
-        year: int
-            Year of filing
-        qtr: int
-            Choices: {1, 2, 3, 4}
-
-        rtype: pd.DataFrame
-            DataFrame of cleaned master.idx data
-        '''
-        
-        master_path = self.__get_master_path(year, qtr)
-        url, text = self.load_url(master_path)
-
-        data_split = text.split("--------------------------------------------------------------------------------")
-        data = data_split[1].strip().split("\n")
-        df = pd.DataFrame([x.split("|") for x in data], columns=["CIK","Company Name","Form Type","Date Filed","Filename"]) 
-        df["Filename"] = df["Filename"].apply(lambda s: "https://www.sec.gov/Archives/" + s)
-        
-        self.master_df = df
-        return df        
-
-    def search_loan_agreements(self):
-        def is_loan_agreement(text) -> bool:
-            keywords = {
-                    "CREDIT AGREEMENT", "LOAN AGREEMENT", "CREDIT FACILITY", "LOAN AND SECURITY AGREEMENT", "LOAN & SECURITY AGREEMENT", "CREDIT AND GUARANTEE AGREEMENT", 
-                    "CREDIT & GUARANTEE AGREEMENT", "CREDIT AND GUARANTY AGREEMENT", "CREDIT & GUARANTY AGREEMENT", "LOAN AND GUARANTEE AGREEMENT", "LOAN & GUARANTEE AGREEMENT",
-                    "LOAN AND GUARANTY AGREEMENT", "LOAN & GUARANTY AGREEMENT", "CREDIT AND SECURITY AGREEMENT", "CREDIT & SECURITY AGREEMENT", "LOAN AND SECURITY AGREEMENT",
-                    "LOAN & SECURITY AGREEMENT", "REVOLVING CREDIT", "FINANCING AND SECURITY AGREEMENT", "FINANCING & SECURITY AGREEMENT", "FACILITY AGREEMENT"
-            }
-            return any(keyword in text for keyword in keywords)
-
-        df = self.master_df.copy()
-        df = df[df["Form Type"] == "8-K"]
-
-        print(f"{df.shape[0]} filings to scrape...")
-
-        out = self.download(urls=df["Filename"].to_list())
-        downloads_df = pd.DataFrame(out, columns=["Filename", "Text"])
-
-        downloads_df["Is Loan Agreement"] = downloads_df["Text"].apply(is_loan_agreement)
-
-        return df.merge(downloads_df, how="left", on="Filename").drop(columns="Text")        
-
-
-    def download(self, urls):
-        out = []
-        total_urls = len(urls)
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            future_to_url = (executor.submit(self.load_url, url) for url in urls)
-                
-            for future in tqdm(concurrent.futures.as_completed(future_to_url), total=total_urls, colour="green"):
-                try:
-                    url, text = future.result()
-                    #self.export(text, url.replace("/", "\\"))
-                    out.append((url, text))
-                except Exception as exc:
-                    text = str(type(exc))
-
-        return out
+        self.downloader = None
+        self.exporter = None
     
-    def export(self, text, path):
-        with open(path, "w+") as f:
-            f.write(text)
+    def set_downloader(self, strategy: 'DownloaderStrategy') -> 'Client':
+        self.downloader = strategy
+        return self
 
-    @sleep_and_retry
-    @limits(calls=10, period=1)
-    def load_url(self, url):
-        req = urllib.request.Request(url, headers=self.headers)
+    def set_exporter(self, strategy: 'ExporterStrategy') -> 'Client':
+        self.exporter = strategy
+        return self
+    
+    def download(self):
+        if self.downloader == None:
+            raise Exception("No current DownloaderStrategy")
+        else:
+            return self.downloader.download()
 
-        try:
-            resp = urllib.request.urlopen(req)
+    def export(self, *args, **kwargs) -> None:
+        if self.exporter == None:
+            raise Exception("No current ExporterStrategy")
+        else:
+            return self.exporter.export(*args, **kwargs)
 
-            if resp.getcode() != 200:
-                raise Exception(f"error not 200, {resp.getcode()}") 
 
-            data = resp.read()
-        except (http.client.IncompleteRead) as e:
-            data = e.partial
-        except urllib.error.HTTPError as e:
-            raise Exception(f"HTTPError on {url}")
+if __name__ == "__main__":
+    for YEAR in [2020, 2021, 2022]:
+        for QTR in [1,2,3,4]:
+            client = Client()
 
-        text = data.decode("utf-8")
-        
-        return url, text
-
-    def __get_master_path(self, year: int, qtr: int) -> str:
-        url = os.path.join(self.base_path, str(year), "QTR" + str(qtr), "master.idx")
-
-        return url
+            client.set_downloader(DownloadLoanAgreementStrategy(YEAR, QTR))
+            client.set_exporter(ExportHTMLStrategy())
+            
+            loan_agreements = client.download()
+            client.export(loan_agreements, f"loan_agreements/{YEAR}/{QTR}/")
+            print("")
