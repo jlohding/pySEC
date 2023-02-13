@@ -37,4 +37,3 @@ if __name__ == "__main__":
             
             loan_agreements = client.download()
             client.export(loan_agreements, f"loan_agreements/{YEAR}/{QTR}/")
-            print("")

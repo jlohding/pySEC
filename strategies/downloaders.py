@@ -13,7 +13,7 @@ class MasterStrategy(DownloaderStrategy):
         Returns master.idx DataFrame
 
         year: int
-            Year of filing
+            Year of filing YYYY
         qtr: int
             Choices: {1, 2, 3, 4}
 
@@ -43,6 +43,14 @@ class SearchLoanAgreementStrategy(DownloaderStrategy):
         self.master_df = master_df
 
     def download(self) -> pd.DataFrame:
+        '''
+        Given self.master_df master.idx dataframe, scrapes all filings with FormType 8-K, and checks if the filings are loan agreements
+        Returns dataframe of 8-K filings with "Is Loan Agreement" boolean column indicating if the filing is a loan agreement
+
+        rtype: pd.DataFrame
+            DataFrame of 8-K filings info
+        '''
+
         def is_loan_agreement(text) -> bool:
             keywords = {
                     "CREDIT AGREEMENT", "LOAN AGREEMENT", "CREDIT FACILITY", "LOAN AND SECURITY AGREEMENT", "LOAN & SECURITY AGREEMENT", "CREDIT AND GUARANTEE AGREEMENT", 
@@ -73,7 +81,10 @@ class DownloadLoanAgreementStrategy(DownloaderStrategy):
 
     def download(self):
         '''
-        Downloads all HTML from {filings_path}.csv where is_loan_agreement = True 
+        Given dataframe of 8-K filings at self.filings_path, downloads all HTML from {filings_path}.csv where is_loan_agreement = True 
+
+        rtype: List[Tuple[url,html]]
+            List of tuples of pairs (url, html) of downloaded filings from SEC website
         '''
         path = os.path.join(self.filings_path, f"{self.year}_{self.qtr}.csv")
         filings = pd.read_csv(path)
