@@ -1,6 +1,7 @@
 from .strategy import ExporterStrategy
 import os
 from bs4 import BeautifulSoup
+from tqdm import tqdm
 
 class ExportDataFrameStrategy(ExporterStrategy):
     '''
@@ -18,7 +19,7 @@ class ExportHTMLStrategy(ExporterStrategy):
     def export(self, data: list, destination_path: str):
         self._mkdir_if_not_exist(destination_path)
 
-        for url, html in data:
+        for url, html in tqdm(data, desc="Export Progress", colour="green"):
             cleaned = self.__clean_url(url)
             path = os.path.join(destination_path, cleaned)
 
@@ -36,13 +37,15 @@ class ExportHTMLStrategy(ExporterStrategy):
         '''
         Parses html string and removes tags
         '''
-        soup = BeautifulSoup(html, features="html.parser")
+
+        soup = BeautifulSoup(html, "lxml")
 
         # kill all script and style elements
         for script in soup(["script", "style"]):
             script.extract()    # remove
         # get text
         text = soup.get_text()
+
         # break into lines and remove leading and trailing space on each
         lines = (line.strip() for line in text.splitlines())
         # break multi-headlines into a line each
@@ -51,5 +54,3 @@ class ExportHTMLStrategy(ExporterStrategy):
         text = '\n'.join(chunk for chunk in chunks if chunk)
         
         return text
-
-
