@@ -1,0 +1,6 @@
+beautifulsoup4==4.11.2
+pandas==1.4.3
+ratelimit==2.2.1
+tqdm==4.64.1
+typer==0.7.0
+lxml
